@@ -40,6 +40,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # mpv 的 ci/build-mingw64.sh 会从 code.videolan.org 克隆 dav1d 和 libplacebo，
+      # 但该域名在 GitHub Actions runner 上会 DNS 解析失败：
+      #   fatal: unable to access 'https://code.videolan.org/videolan/dav1d.git/':
+      #   Could not resolve host: code.videolan.org   (exit 128)
+      # 这两个项目在 GitHub 都有官方/作者镜像，用 insteadOf 重写 URL 绕过，
+      # 不需要改动上游脚本本身。
+      # 说明：libplacebo 的 6 个子模块本身就指向 github.com，无需额外规则；
+      #       dav1d 没有子模块。
+      - name: Redirect videolan git hosts to GitHub mirrors
+        run: |
+          git config --global url."https://github.com/videolan/dav1d".insteadOf \
+            "https://code.videolan.org/videolan/dav1d"
+          git config --global url."https://github.com/haasn/libplacebo".insteadOf \
+            "https://code.videolan.org/videolan/libplacebo"
+          echo "== 已生效的 URL 重写规则 =="
+          git config --global --get-regexp '^url\..*\.insteadof$'
+          # 验证重写确实生效（只看引用，不下载）
+          git ls-remote --heads https://code.videolan.org/videolan/dav1d.git >/dev/null \
+            && echo "dav1d 镜像可达 OK"
+          git ls-remote --heads https://code.videolan.org/videolan/libplacebo.git >/dev/null \
+            && echo "libplacebo 镜像可达 OK"
+
       # 关键步骤：换成 mpv 上游最新源码。
       # 仓库里的 mpv/ 是 submodule，指向某个固定 commit（可能落后好几个月），
       # 直接删掉重新浅克隆，保证编出来的是上游最新。
