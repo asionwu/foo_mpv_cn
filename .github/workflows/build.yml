@@ -72,6 +72,17 @@ jobs:
           echo "== mpv upstream commit =="
           git -C mpv log -1 --format='%H%n%ci%n%s'
 
+      # 修补上游源码：mpv 的 video/out/w32_common.c 在 update_dark_mode() 里
+      # 调用 uxtheme!SetPreferredAppMode(1)（未公开 API，**进程级**）来启用
+      # 深色标题栏。libmpv 被宿主（如 foobar2000）加载时，这次调用会把宿主的
+      # ForceDark 覆盖成 AllowDark —— 系统若是浅色主题，宿主整个界面（含右键
+      # 菜单）就会变浅色。补丁加 `!w32->parent` 条件：仅在 mpv 自建顶层窗口
+      # 时调用，嵌入模式（wid）下跳过。窗口级的 SetWindowTheme /
+      # DwmSetWindowAttribute 不受影响，mpv 自身窗口的深色表现不变。
+      # 脚本是幂等的；找不到目标代码会以非零退出，让 CI 明确失败而不是静默放过。
+      - name: Patch mpv dark-mode host pollution
+        run: python3 scripts/patch-mpv-darkmode.py mpv
+
       - name: Install upstream build tools
         run: |
           rustup target add "$RUST_TARGET"
